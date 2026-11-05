@@ -248,7 +248,7 @@ def has_acl(p):
 
 
 def absent(p):
-    return bool(re.search(r"does not exist|No such file|0653-341|not found\b.*\bdirectory|cannot access",
+    return bool(re.search(r"does not exist|No such file|0653-341|0652-033|Cannot open|not found\b.*\bdirectory|cannot access",
                           errtext(p), re.I))
 
 
@@ -1492,9 +1492,26 @@ def _():
 # 4.6.4  sendmail
 # ---------------------------------------------------------------------------
 
+SENDMAIL_FS = "bos.net.tcp.sendmail"
+
+
+def _sendmail_gate(rid):
+    """PASS (not applicable) when sendmail is not installed; otherwise run the normal check."""
+    inner = EVAL[rid]
+
+    def f():
+        sys_probe("lslpp_all")
+        if fileset_installed(SENDMAIL_FS) is False:
+            return PASS("sendmail (%s) is not installed - not applicable" % SENDMAIL_FS)
+        return inner()
+    EVAL[rid] = f
+
+
 @reg("4.6.4.1")
 def _():
     a, b = G("4.6.4.1", "a"), G("4.6.4.1", "b")
+    if not L(a) and absent(a):
+        return PASS("/etc/mail/sendmail.cf does not exist - nothing to check")
     t = text(a)
     bad = []
     if not L(a):
@@ -1509,6 +1526,8 @@ def _():
 @reg("4.6.4.2")
 def _():
     p = G("4.6.4.2", "a")
+    if not L(p) and absent(p):
+        return PASS("/etc/mail/sendmail.cf does not exist - nothing to check")
     t = text(p).lower()
     miss = [o for o in ("authwarnings", "novrfy", "noexpn") if o not in t]
     if not L(p):
@@ -1516,9 +1535,12 @@ def _():
     return FAIL("missing PrivacyOptions: " + ", ".join(miss)) if miss else PASS(text(p).strip()[:100])
 
 
-perm("4.6.4.3", "a", {"root"}, {"system"}, 0o640)
+perm("4.6.4.3", "a", {"root"}, {"system"}, 0o640, optional=True)
 perm("4.6.4.4", "a", {"smmsp"}, {"smmsp"}, 0o770, optional=True)
 perm("4.6.4.5", "a", {"root"}, None, 0o700, optional=True)
+
+for _rid in ("4.6.4.1", "4.6.4.2", "4.6.4.3", "4.6.4.4", "4.6.4.5"):
+    _sendmail_gate(_rid)
 
 # ---------------------------------------------------------------------------
 # 4.7  Login controls
